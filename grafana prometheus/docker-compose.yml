@@ -1,0 +1,50 @@
+services:  # Define all the containers (services) used in this stack
+
+  prometheus:
+    image: prom/prometheus:latest  # Use the official Prometheus image (latest version)
+    container_name: prometheus     # Set a custom name for this container
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro  # Mount custom Prometheus config file (read-only)
+    ports:
+      - "9090:9090"  # Map port 9090 from container to host (access Prometheus at http://localhost:9090)
+    networks:
+      - monitoring   # Connect to the custom Docker network named "monitoring"
+
+  grafana:
+    image: grafana/grafana-oss:latest  # Use the latest open-source Grafana image
+    container_name: grafana            # Set a custom name for the Grafana container
+    ports:
+      - "3000:3000"  # Map Grafana’s default port to host (access at http://localhost:3000)
+    networks:
+      - monitoring   # Join the same monitoring network to communicate with Prometheus and Loki
+    volumes:
+      - grafana_data:/var/lib/grafana  # Persist Grafana's dashboards and settings using a named volume
+    restart: unless-stopped  # Restart Grafana if it crashes, unless manually stopped
+
+  loki:
+    image: grafana/loki:2.9.4  # Use specific version 2.9.4 of Loki log aggregation system
+    container_name: loki       # Custom container name
+    ports:
+      - "3100:3100"  # Map Loki's API port (for Grafana to query logs)
+    command: -config.file=/etc/loki/local-config.yaml  # Use a specific config file inside the container
+    networks:
+      - monitoring   # Join the monitoring network for internal communication
+
+  promtail:
+    image: grafana/promtail:2.9.4  # Use Promtail v2.9.4 to collect and ship logs to Loki
+    container_name: promtail       # Custom name for the Promtail container
+    volumes:
+      - /var/log:/var/log:ro  # Mount host log directory (read-only). May not work as expected on macOS/Windows
+      - /etc/machine-id:/etc/machine-id:ro  # Mount host machine ID (used for labels)
+      - /etc/hostname:/etc/hostname:ro      # Mount host hostname (used for labels)
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro  # Mount custom Promtail config file (read-only)
+    command: -config.file=/etc/promtail/config.yml  # Start Promtail using the mounted config
+    networks:
+      - monitoring   # Connect to the monitoring network to send logs to Loki
+
+volumes:
+  grafana_data:  # Define a named volume to persist Grafana data (dashboards, users, settings)
+
+networks:
+  monitoring:     # Define a custom user-defined bridge network
+    driver: bridge  # Use the default Docker bridge driver
